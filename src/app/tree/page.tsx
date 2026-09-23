@@ -18,13 +18,14 @@ import {
   Sparkles,
   GitFork
 } from 'lucide-react';
-import { TreeNode, TreeLink } from '@/lib/tree-layout';
+import { TreeNode, TreeLink, MarriageLink } from '@/lib/tree-layout';
 import { Branch, Person } from '@/lib/types';
 import { toPng } from 'html-to-image';
 
 export default function TreePage() {
   const [nodes, setNodes] = useState<TreeNode[]>([]);
   const [links, setLinks] = useState<TreeLink[]>([]);
+  const [marriageLinks, setMarriageLinks] = useState<MarriageLink[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranch, setSelectedBranch] = useState<string>('');
   const [selectedGeneration, setSelectedGeneration] = useState<string>('');
@@ -75,6 +76,7 @@ export default function TreePage() {
       const data = await res.json();
       setNodes(data.layout.nodes);
       setLinks(data.layout.links);
+      setMarriageLinks(data.layout.marriageLinks || []);
       setBranches(data.branches);
       setTimeout(() => {
         centerTree(0.85);
@@ -270,12 +272,53 @@ export default function TreePage() {
                 <stop offset="100%" stopColor="#b91c1c" stopOpacity="0.95" />
               </linearGradient>
 
-              {/* Gradient Nhánh Nữ (Nhánh Ngoại - Màu Xanh) */}
-              <linearGradient id="femaleLinkGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.9" />
-                <stop offset="100%" stopColor="#0284c7" stopOpacity="0.95" />
+              {/* Gradient Hôn Nhân (Vợ - Chồng - Màu Hồng Son / Rose Coral) */}
+              <linearGradient id="marriageGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#f43f5e" stopOpacity="0.9" />
+                <stop offset="100%" stopColor="#e11d48" stopOpacity="0.95" />
               </linearGradient>
             </defs>
+
+            {/* 1. Đường nối Hôn Nhân (Vợ - Chồng) */}
+            {marriageLinks.map((mLink) => {
+              return (
+                <g key={mLink.id}>
+                  {/* Đường nối ngang nét đứt sang trọng */}
+                  <line
+                    x1={mLink.sourceX}
+                    y1={mLink.sourceY}
+                    x2={mLink.targetX}
+                    y2={mLink.targetY}
+                    stroke="url(#marriageGradient)"
+                    strokeWidth="2.5"
+                    strokeDasharray="4 3"
+                  />
+                  {/* Biểu tượng Trái Tim Hôn Nhân ở điểm giữa */}
+                  <circle
+                    cx={mLink.midX}
+                    cy={mLink.midY}
+                    r="12"
+                    fill="#fff1f2"
+                    stroke="#f43f5e"
+                    strokeWidth="2"
+                    className="shadow-sm"
+                  />
+                  <text
+                    x={mLink.midX}
+                    y={mLink.midY + 4}
+                    textAnchor="middle"
+                    fill="#e11d48"
+                    fontSize="13"
+                    fontWeight="bold"
+                    className="select-none"
+                  >
+                    ♥
+                  </text>
+                </g>
+              );
+            })}
+
+            {/* 2. Đường nối Cha/Mẹ -> Con */}
             {links.map((link) => {
               // Đường cong trực giao mượt
               const deltaY = link.targetY - link.sourceY;
@@ -399,6 +442,10 @@ export default function TreePage() {
           <div className="flex items-center gap-2">
             <span className="w-5 h-1 border-t-2 border-dashed border-sky-500 inline-block" />
             <span className="font-semibold text-sky-800">Nhánh Nữ (Nhánh Ngoại)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-5 h-1 border-t-2 border-dashed border-rose-500 inline-block" />
+            <span className="font-semibold text-rose-700">♥ Liên Kết Hôn Nhân (Vợ - Chồng)</span>
           </div>
         </div>
       </div>

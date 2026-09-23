@@ -24,9 +24,23 @@ export interface TreeLink {
   childGender: 'MALE' | 'FEMALE' | 'OTHER';
 }
 
+export interface MarriageLink {
+  id: string;
+  husbandId: string;
+  wifeId: string;
+  sourceX: number;
+  sourceY: number;
+  targetX: number;
+  targetY: number;
+  midX: number;
+  midY: number;
+  notes?: string;
+}
+
 export interface TreeLayoutResult {
   nodes: TreeNode[];
   links: TreeLink[];
+  marriageLinks: MarriageLink[];
   minX: number;
   maxX: number;
   minY: number;
@@ -81,11 +95,36 @@ export function buildFamilyTreeLayout(
     // Sắp xếp thứ tự sinh (con trưởng trước, con thứ sau)
     genPersons.sort((a, b) => (a.birthOrder || 1) - (b.birthOrder || 1));
 
-    const totalWidthForGen = genPersons.length * (NODE_WIDTH + HORIZONTAL_GAP) - HORIZONTAL_GAP;
+    // Nhóm vợ chồng đứng liền kề nhau để đường nối hôn nhân luôn ngắn gọn, đẹp mắt
+    const orderedPersons: Person[] = [];
+    const visited = new Set<string>();
+
+    genPersons.forEach((p) => {
+      if (visited.has(p.id)) return;
+      visited.add(p.id);
+      orderedPersons.push(p);
+
+      // Tìm vợ/chồng trong cùng thế hệ này
+      marriages.forEach((m) => {
+        let spouseId: string | null = null;
+        if (m.husbandId === p.id) spouseId = m.wifeId;
+        if (m.wifeId === p.id) spouseId = m.husbandId;
+
+        if (spouseId) {
+          const spouse = genPersons.find((sp) => sp.id === spouseId);
+          if (spouse && !visited.has(spouse.id)) {
+            visited.add(spouse.id);
+            orderedPersons.push(spouse);
+          }
+        }
+      });
+    });
+
+    const totalWidthForGen = orderedPersons.length * (NODE_WIDTH + HORIZONTAL_GAP) - HORIZONTAL_GAP;
     const startX = -totalWidthForGen / 2;
     const currentY = genIndex * (NODE_HEIGHT + VERTICAL_GAP);
 
-    genPersons.forEach((person, pIndex) => {
+    orderedPersons.forEach((person, pIndex) => {
       const currentX = startX + pIndex * (NODE_WIDTH + HORIZONTAL_GAP);
 
       // Tìm vợ / chồng
@@ -148,9 +187,54 @@ export function buildFamilyTreeLayout(
     }
   });
 
+  // Tạo liên kết Hôn Nhân (Vợ - Chồng)
+  const marriageLinks: MarriageLink[] = [];
+  const processedMarriages = new Set<string>();
+
+  marriages.forEach((m) => {
+    const husbandNode = nodeMap.get(m.husbandId);
+    const wifeNode = nodeMap.get(m.wifeId);
+
+    if (husbandNode && wifeNode) {
+      const pairKey = [m.husbandId, m.wifeId].sort().join('-');
+      if (processedMarriages.has(pairKey)) return;
+      processedMarriages.add(pairKey);
+
+      let sourceX = 0;
+      let targetX = 0;
+      const sourceY = husbandNode.y + husbandNode.height / 2;
+      const targetY = wifeNode.y + wifeNode.height / 2;
+
+      if (husbandNode.x < wifeNode.x) {
+        sourceX = husbandNode.x + husbandNode.width;
+        targetX = wifeNode.x;
+      } else {
+        sourceX = husbandNode.x;
+        targetX = wifeNode.x + wifeNode.width;
+      }
+
+      const midX = (sourceX + targetX) / 2;
+      const midY = (sourceY + targetY) / 2;
+
+      marriageLinks.push({
+        id: `m-link-${m.id}`,
+        husbandId: m.husbandId,
+        wifeId: m.wifeId,
+        sourceX,
+        sourceY,
+        targetX,
+        targetY,
+        midX,
+        midY,
+        notes: m.notes,
+      });
+    }
+  });
+
   return {
     nodes,
     links,
+    marriageLinks,
     minX: overallMinX === Infinity ? 0 : overallMinX,
     maxX: overallMaxX === -Infinity ? 800 : overallMaxX,
     minY: overallMinY === Infinity ? 0 : overallMinY,
