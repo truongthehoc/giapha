@@ -1,10 +1,17 @@
 import { Person, ParentChild, Marriage, Branch } from './types';
 
+export interface PersonCardItem {
+  person: Person;
+  role: 'PRIMARY' | 'SPOUSE';
+  spouseOrder?: number;
+  marriageNotes?: string;
+}
+
 export interface TreeNode {
   id: string;
-  person: Person;
-  spouses: Person[];
-  children: TreeNode[];
+  primaryPersonId: string;
+  memberIds: string[];
+  members: PersonCardItem[]; // Danh sách các card nhỏ bên trong card lớn
   generation: number;
   branchName?: string;
   x: number;
@@ -24,23 +31,9 @@ export interface TreeLink {
   childGender: 'MALE' | 'FEMALE' | 'OTHER';
 }
 
-export interface MarriageLink {
-  id: string;
-  husbandId: string;
-  wifeId: string;
-  sourceX: number;
-  sourceY: number;
-  targetX: number;
-  targetY: number;
-  midX: number;
-  midY: number;
-  notes?: string;
-}
-
 export interface TreeLayoutResult {
   nodes: TreeNode[];
   links: TreeLink[];
-  marriageLinks: MarriageLink[];
   minX: number;
   maxX: number;
   minY: number;
@@ -55,9 +48,11 @@ export function buildFamilyTreeLayout(
   selectedBranchId: string | null = null,
   selectedGeneration: number | null = null
 ): TreeLayoutResult {
-  const NODE_WIDTH = 240;
-  const NODE_HEIGHT = 120;
-  const HORIZONTAL_GAP = 60;
+  const SUB_CARD_WIDTH = 200;
+  const SUB_CARD_GAP = 16;
+  const CARD_PADDING = 24;
+  const NODE_HEIGHT = 160;
+  const FAMILY_GAP = 60;
   const VERTICAL_GAP = 140;
 
   // Lọc persons nếu có filter
@@ -87,146 +82,141 @@ export function buildFamilyTreeLayout(
   let overallMinY = Infinity;
   let overallMaxY = -Infinity;
 
+  // Bản đồ ánh xạ từng personId -> Family TreeNode tương ứng
+  const personToFamilyNodeMap = new Map<string, TreeNode>();
+
   sortedGens.forEach((gen, genIndex) => {
     if (selectedGeneration && gen !== selectedGeneration && selectedGeneration > 0) {
-      // nếu chọn lọc thế hệ
+      // nếu lọc theo thế hệ
     }
     const genPersons = generationsMap.get(gen) || [];
-    // Sắp xếp thứ tự sinh (con trưởng trước, con thứ sau)
     genPersons.sort((a, b) => (a.birthOrder || 1) - (b.birthOrder || 1));
 
-    // Nhóm vợ chồng đứng liền kề nhau để đường nối hôn nhân luôn ngắn gọn, đẹp mắt
-    const orderedPersons: Person[] = [];
-    const visited = new Set<string>();
+    // Nhóm các thành viên thành các Hộ Gia Đình (Card Lớn)
+    // 1 người chính + Tất cả các vợ (hoặc tất cả các chồng)
+    const familyUnits: { primary: Person; spouses: { person: Person; notes?: string; order: number }[] }[] = [];
+    const handledPersonIds = new Set<string>();
 
-    genPersons.forEach((p) => {
-      if (visited.has(p.id)) return;
-      visited.add(p.id);
-      orderedPersons.push(p);
+    // Bước 1: Ưu tiên thành viên dòng họ chính (nam đinh hoặc người có quan hệ cha-con)
+    genPersons.forEach((person) => {
+      if (handledPersonIds.has(person.id)) return;
 
-      // Tìm vợ/chồng trong cùng thế hệ này
+      // Tìm tất cả các cuộc hôn nhân liên quan đến người này
+      const spouseItems: { person: Person; notes?: string; order: number }[] = [];
       marriages.forEach((m) => {
         let spouseId: string | null = null;
-        if (m.husbandId === p.id) spouseId = m.wifeId;
-        if (m.wifeId === p.id) spouseId = m.husbandId;
+        if (m.husbandId === person.id) spouseId = m.wifeId;
+        if (m.wifeId === person.id) spouseId = m.husbandId;
 
         if (spouseId) {
-          const spouse = genPersons.find((sp) => sp.id === spouseId);
-          if (spouse && !visited.has(spouse.id)) {
-            visited.add(spouse.id);
-            orderedPersons.push(spouse);
+          const spouse = persons.find((sp) => sp.id === spouseId);
+          if (spouse && !handledPersonIds.has(spouse.id)) {
+            spouseItems.push({
+              person: spouse,
+              notes: m.notes || (m.marriageOrder > 1 ? `Vợ thứ ${m.marriageOrder}` : 'Chánh Thất'),
+              order: m.marriageOrder || 1,
+            });
           }
         }
       });
+
+      // Đánh dấu đã xử lý
+      handledPersonIds.add(person.id);
+      spouseItems.forEach((sp) => handledPersonIds.add(sp.person.id));
+
+      familyUnits.push({
+        primary: person,
+        spouses: spouseItems,
+      });
     });
 
-    const totalWidthForGen = orderedPersons.length * (NODE_WIDTH + HORIZONTAL_GAP) - HORIZONTAL_GAP;
-    const startX = -totalWidthForGen / 2;
+    // Tính toán chiều rộng từng Card Lớn trong thế hệ này
+    const familyWidths = familyUnits.map((fam) => {
+      const memberCount = 1 + fam.spouses.length;
+      return memberCount * SUB_CARD_WIDTH + (memberCount - 1) * SUB_CARD_GAP + CARD_PADDING;
+    });
+
+    const totalWidthForGen = familyWidths.reduce((sum, w) => sum + w, 0) + (familyUnits.length - 1) * FAMILY_GAP;
+    let currentX = -totalWidthForGen / 2;
     const currentY = genIndex * (NODE_HEIGHT + VERTICAL_GAP);
 
-    orderedPersons.forEach((person, pIndex) => {
-      const currentX = startX + pIndex * (NODE_WIDTH + HORIZONTAL_GAP);
+    familyUnits.forEach((fam, fIndex) => {
+      const famWidth = familyWidths[fIndex];
+      const branch = branches.find((b) => b.id === fam.primary.branchId);
 
-      // Tìm vợ / chồng
-      const spouseIds: string[] = [];
-      marriages.forEach((m) => {
-        if (m.husbandId === person.id) spouseIds.push(m.wifeId);
-        if (m.wifeId === person.id) spouseIds.push(m.husbandId);
-      });
-      const spouses = persons.filter((p) => spouseIds.includes(p.id));
+      const membersList: PersonCardItem[] = [
+        {
+          person: fam.primary,
+          role: 'PRIMARY',
+        },
+        ...fam.spouses.map((sp) => ({
+          person: sp.person,
+          role: 'SPOUSE' as const,
+          spouseOrder: sp.order,
+          marriageNotes: sp.notes,
+        })),
+      ];
 
-      const branch = branches.find((b) => b.id === person.branchId);
+      const allMemberIds = membersList.map((m) => m.person.id);
 
       const treeNode: TreeNode = {
-        id: person.id,
-        person: person,
-        spouses: spouses,
-        children: [],
+        id: `fam-${fam.primary.id}`,
+        primaryPersonId: fam.primary.id,
+        memberIds: allMemberIds,
+        members: membersList,
         generation: gen,
         branchName: branch?.name,
         x: currentX,
         y: currentY,
-        width: NODE_WIDTH,
+        width: famWidth,
         height: NODE_HEIGHT,
       };
 
       nodes.push(treeNode);
 
+      // Đăng ký cho từng thành viên trong gia đình
+      allMemberIds.forEach((mId) => {
+        personToFamilyNodeMap.set(mId, treeNode);
+      });
+
       overallMinX = Math.min(overallMinX, currentX);
-      overallMaxX = Math.max(overallMaxX, currentX + NODE_WIDTH);
+      overallMaxX = Math.max(overallMaxX, currentX + famWidth);
       overallMinY = Math.min(overallMinY, currentY);
       overallMaxY = Math.max(overallMaxY, currentY + NODE_HEIGHT);
+
+      currentX += famWidth + FAMILY_GAP;
     });
   });
 
-  // Tạo liên kết links Cha/Mẹ -> Con
-  const nodeMap = new Map<string, TreeNode>();
-  nodes.forEach((n) => nodeMap.set(n.id, n));
+  // Tạo liên kết links Cha/Mẹ (Card Lớn) -> Con (Card Lớn)
+  const processedLinks = new Set<string>();
 
   parentChildren.forEach((pc) => {
-    const parentNode = nodeMap.get(pc.parentId);
-    const childNode = nodeMap.get(pc.childId);
+    const parentFamNode = personToFamilyNodeMap.get(pc.parentId);
+    const childFamNode = personToFamilyNodeMap.get(pc.childId);
 
-    if (parentNode && childNode) {
-      // Điểm xuất phát từ giữa đáy của cha/mẹ đến đỉnh giữa của con
-      const sourceX = parentNode.x + parentNode.width / 2;
-      const sourceY = parentNode.y + parentNode.height;
-      const targetX = childNode.x + childNode.width / 2;
-      const targetY = childNode.y;
+    if (parentFamNode && childFamNode && parentFamNode.id !== childFamNode.id) {
+      const linkKey = `${parentFamNode.id}-${childFamNode.id}`;
+      if (processedLinks.has(linkKey)) return;
+      processedLinks.add(linkKey);
+
+      const childPerson = persons.find((p) => p.id === pc.childId);
+
+      // Điểm xuất phát từ giữa đáy của Card Lớn Cha/Mẹ đến đỉnh giữa của Card Lớn Con
+      const sourceX = parentFamNode.x + parentFamNode.width / 2;
+      const sourceY = parentFamNode.y + parentFamNode.height;
+      const targetX = childFamNode.x + childFamNode.width / 2;
+      const targetY = childFamNode.y;
 
       links.push({
-        id: `link-${parentNode.id}-${childNode.id}`,
-        sourceId: parentNode.id,
-        targetId: childNode.id,
+        id: `link-${linkKey}`,
+        sourceId: parentFamNode.id,
+        targetId: childFamNode.id,
         sourceX,
         sourceY,
         targetX,
         targetY,
-        childGender: childNode.person.gender || 'MALE',
-      });
-    }
-  });
-
-  // Tạo liên kết Hôn Nhân (Vợ - Chồng)
-  const marriageLinks: MarriageLink[] = [];
-  const processedMarriages = new Set<string>();
-
-  marriages.forEach((m) => {
-    const husbandNode = nodeMap.get(m.husbandId);
-    const wifeNode = nodeMap.get(m.wifeId);
-
-    if (husbandNode && wifeNode) {
-      const pairKey = [m.husbandId, m.wifeId].sort().join('-');
-      if (processedMarriages.has(pairKey)) return;
-      processedMarriages.add(pairKey);
-
-      let sourceX = 0;
-      let targetX = 0;
-      const sourceY = husbandNode.y + husbandNode.height / 2;
-      const targetY = wifeNode.y + wifeNode.height / 2;
-
-      if (husbandNode.x < wifeNode.x) {
-        sourceX = husbandNode.x + husbandNode.width;
-        targetX = wifeNode.x;
-      } else {
-        sourceX = husbandNode.x;
-        targetX = wifeNode.x + wifeNode.width;
-      }
-
-      const midX = (sourceX + targetX) / 2;
-      const midY = (sourceY + targetY) / 2;
-
-      marriageLinks.push({
-        id: `m-link-${m.id}`,
-        husbandId: m.husbandId,
-        wifeId: m.wifeId,
-        sourceX,
-        sourceY,
-        targetX,
-        targetY,
-        midX,
-        midY,
-        notes: m.notes,
+        childGender: childPerson?.gender || 'MALE',
       });
     }
   });
@@ -234,7 +224,6 @@ export function buildFamilyTreeLayout(
   return {
     nodes,
     links,
-    marriageLinks,
     minX: overallMinX === Infinity ? 0 : overallMinX,
     maxX: overallMaxX === -Infinity ? 800 : overallMaxX,
     minY: overallMinY === Infinity ? 0 : overallMinY,

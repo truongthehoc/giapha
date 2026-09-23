@@ -16,16 +16,16 @@ import {
   X, 
   ExternalLink,
   Sparkles,
-  GitFork
+  GitFork,
+  Heart
 } from 'lucide-react';
-import { TreeNode, TreeLink, MarriageLink } from '@/lib/tree-layout';
+import { TreeNode, TreeLink, PersonCardItem } from '@/lib/tree-layout';
 import { Branch, Person } from '@/lib/types';
 import { toPng } from 'html-to-image';
 
 export default function TreePage() {
   const [nodes, setNodes] = useState<TreeNode[]>([]);
   const [links, setLinks] = useState<TreeLink[]>([]);
-  const [marriageLinks, setMarriageLinks] = useState<MarriageLink[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranch, setSelectedBranch] = useState<string>('');
   const [selectedGeneration, setSelectedGeneration] = useState<string>('');
@@ -34,8 +34,8 @@ export default function TreePage() {
   const [loading, setLoading] = useState(true);
 
   // Zoom & Pan state
-  const [scale, setScale] = useState(0.85);
-  const [position, setPosition] = useState({ x: 700, y: 60 });
+  const [scale, setScale] = useState(0.8);
+  const [position, setPosition] = useState({ x: 700, y: 50 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
@@ -48,7 +48,7 @@ export default function TreePage() {
       const rect = viewportRef.current.getBoundingClientRect();
       setPosition({
         x: rect.width / 2,
-        y: 60,
+        y: 50,
       });
       if (targetScale !== undefined) {
         setScale(targetScale);
@@ -56,7 +56,7 @@ export default function TreePage() {
     } else if (typeof window !== 'undefined') {
       setPosition({
         x: window.innerWidth / 2,
-        y: 60,
+        y: 50,
       });
       if (targetScale !== undefined) {
         setScale(targetScale);
@@ -74,12 +74,11 @@ export default function TreePage() {
 
       const res = await fetch(`/api/tree?${params.toString()}`);
       const data = await res.json();
-      setNodes(data.layout.nodes);
-      setLinks(data.layout.links);
-      setMarriageLinks(data.layout.marriageLinks || []);
-      setBranches(data.branches);
+      setNodes(data.layout.nodes || []);
+      setLinks(data.layout.links || []);
+      setBranches(data.branches || []);
       setTimeout(() => {
-        centerTree(0.85);
+        centerTree(0.8);
       }, 50);
     } catch (err) {
       console.error('Failed to load tree layout', err);
@@ -120,14 +119,14 @@ export default function TreePage() {
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
-    setScale((prev) => Math.min(Math.max(prev * zoomFactor, 0.3), 2.5));
+    setScale((prev) => Math.min(Math.max(prev * zoomFactor, 0.25), 2.5));
   };
 
   // Zoom controls
   const zoomIn = () => setScale((s) => Math.min(s + 0.15, 2.5));
-  const zoomOut = () => setScale((s) => Math.max(s - 0.15, 0.3));
+  const zoomOut = () => setScale((s) => Math.max(s - 0.15, 0.25));
   const resetView = () => {
-    centerTree(0.85);
+    centerTree(0.8);
   };
 
   // Xuất file ảnh PNG
@@ -146,7 +145,11 @@ export default function TreePage() {
 
   // Lọc theo tìm kiếm
   const filteredNodes = searchQuery
-    ? nodes.filter((n) => n.person.fullName.toLowerCase().includes(searchQuery.toLowerCase()))
+    ? nodes.filter((n) =>
+        n.members.some((m) =>
+          m.person.fullName.toLowerCase().includes(searchQuery.toLowerCase())
+        )
+      )
     : nodes;
 
   return (
@@ -259,11 +262,11 @@ export default function TreePage() {
           }}
           className="absolute left-0 top-0 pointer-events-auto"
         >
-          {/* SVG Links (Đường nối Cha/Mẹ -> Con) */}
+          {/* SVG Links (Đường nối Cha/Mẹ Card Lớn -> Con Card Lớn) */}
           <svg
             ref={svgRef}
             className="absolute left-0 top-0 overflow-visible pointer-events-none"
-            style={{ width: '4000px', height: '3000px' }}
+            style={{ width: '5000px', height: '4000px' }}
           >
             <defs>
               {/* Gradient Nhánh Nam (Nhánh Đinh / Chính - Màu Đỏ) */}
@@ -272,59 +275,18 @@ export default function TreePage() {
                 <stop offset="100%" stopColor="#b91c1c" stopOpacity="0.95" />
               </linearGradient>
 
-              {/* Gradient Hôn Nhân (Vợ - Chồng - Màu Hồng Son / Rose Coral) */}
-              <linearGradient id="marriageGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="#f43f5e" stopOpacity="0.9" />
-                <stop offset="100%" stopColor="#e11d48" stopOpacity="0.95" />
+              {/* Gradient Nhánh Nữ (Nhánh Ngoại - Màu Xanh) */}
+              <linearGradient id="femaleLinkGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.9" />
+                <stop offset="100%" stopColor="#0284c7" stopOpacity="0.95" />
               </linearGradient>
             </defs>
 
-            {/* 1. Đường nối Hôn Nhân (Vợ - Chồng) */}
-            {marriageLinks.map((mLink) => {
-              return (
-                <g key={mLink.id}>
-                  {/* Đường nối ngang nét đứt sang trọng */}
-                  <line
-                    x1={mLink.sourceX}
-                    y1={mLink.sourceY}
-                    x2={mLink.targetX}
-                    y2={mLink.targetY}
-                    stroke="url(#marriageGradient)"
-                    strokeWidth="2.5"
-                    strokeDasharray="4 3"
-                  />
-                  {/* Biểu tượng Trái Tim Hôn Nhân ở điểm giữa */}
-                  <circle
-                    cx={mLink.midX}
-                    cy={mLink.midY}
-                    r="12"
-                    fill="#fff1f2"
-                    stroke="#f43f5e"
-                    strokeWidth="2"
-                    className="shadow-sm"
-                  />
-                  <text
-                    x={mLink.midX}
-                    y={mLink.midY + 4}
-                    textAnchor="middle"
-                    fill="#e11d48"
-                    fontSize="13"
-                    fontWeight="bold"
-                    className="select-none"
-                  >
-                    ♥
-                  </text>
-                </g>
-              );
-            })}
-
-            {/* 2. Đường nối Cha/Mẹ -> Con */}
+            {/* Đường nối Cha/Mẹ -> Con */}
             {links.map((link) => {
-              // Đường cong trực giao mượt
               const deltaY = link.targetY - link.sourceY;
               const midY = link.sourceY + deltaY / 2;
               const pathD = `M ${link.sourceX} ${link.sourceY} C ${link.sourceX} ${midY}, ${link.targetX} ${midY}, ${link.targetX} ${link.targetY}`;
-              
               const isFemaleBranch = link.childGender === 'FEMALE';
 
               return (
@@ -333,97 +295,155 @@ export default function TreePage() {
                   d={pathD}
                   fill="none"
                   stroke={isFemaleBranch ? 'url(#femaleLinkGradient)' : 'url(#maleLinkGradient)'}
-                  strokeWidth={isFemaleBranch ? '2.5' : '3'}
-                  strokeDasharray={isFemaleBranch ? '4 2' : undefined}
+                  strokeWidth={isFemaleBranch ? '2.5' : '3.5'}
+                  strokeDasharray={isFemaleBranch ? '5 3' : undefined}
                   strokeLinecap="round"
                 />
               );
             })}
           </svg>
 
-          {/* HTML Nodes (Thẻ thành viên) */}
-          {filteredNodes.map((node) => {
-            const isMale = node.person.gender === 'MALE';
-            const isHighlight = searchQuery && node.person.fullName.toLowerCase().includes(searchQuery.toLowerCase());
+          {/* HTML Nodes: CÁC CARD LỚN (GIA ĐÌNH VỢ CHỒNG) */}
+          {filteredNodes.map((famNode) => {
+            const hasMultipleMembers = famNode.members.length > 1;
 
             return (
               <div
-                key={node.id}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedPerson(node.person);
-                }}
+                key={famNode.id}
                 style={{
                   position: 'absolute',
-                  left: `${node.x}px`,
-                  top: `${node.y}px`,
-                  width: `${node.width}px`,
-                  height: `${node.height}px`,
+                  left: `${famNode.x}px`,
+                  top: `${famNode.y}px`,
+                  width: `${famNode.width}px`,
+                  height: `${famNode.height}px`,
                 }}
-                className={`group rounded-2xl p-3 cursor-pointer shadow-md transition-all duration-200 hover:scale-105 hover:shadow-xl border-2 ${
-                  isHighlight
-                    ? 'ring-4 ring-amber-500 bg-amber-50 border-amber-600'
-                    : isMale
-                    ? 'bg-gradient-to-br from-white to-amber-50/50 border-[#cfa074] hover:border-amber-600'
-                    : 'bg-gradient-to-br from-white to-rose-50/50 border-[#ead8c0] hover:border-rose-400'
+                className={`rounded-3xl p-3 shadow-lg border-2 transition-all duration-200 backdrop-blur-sm ${
+                  hasMultipleMembers
+                    ? 'bg-gradient-to-b from-[#fdfbf7] via-amber-50/50 to-[#fdfbf7] border-[#cfa074] hover:border-amber-600 hover:shadow-2xl'
+                    : 'bg-white/95 border-[#ddbd9b] hover:border-amber-500 hover:shadow-xl'
                 }`}
               >
-                <div className="flex items-center gap-3 h-full">
-                  {/* Avatar */}
-                  <div className="relative flex-shrink-0">
-                    <img
-                      src={node.person.avatarUrl || (isMale ? 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150' : 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150')}
-                      alt={node.person.fullName}
-                      className="w-14 h-14 rounded-full object-cover border-2 border-amber-500/40 shadow-sm"
-                    />
-                    <span
-                      className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${
-                        node.person.isAlive ? 'bg-emerald-500' : 'bg-stone-500'
-                      }`}
-                      title={node.person.isAlive ? 'Còn sống' : 'Đã mất'}
-                    />
-                  </div>
-
-                  {/* Thông tin chính */}
-                  <div className="flex-1 min-w-0 flex flex-col justify-between h-full py-0.5">
-                    <div>
-                      <div className="flex items-center justify-between gap-1">
-                        <span className="text-[10px] uppercase font-bold px-1.5 py-0.2 rounded bg-amber-200/60 text-amber-900">
-                          Đời {node.generation}
-                        </span>
-                        {node.branchName && (
-                          <span className="text-[9px] text-stone-500 truncate max-w-[80px]">
-                            {node.branchName.split('(')[0]}
-                          </span>
-                        )}
-                      </div>
-
-                      <h4 className="font-bold text-sm text-[#341d13] font-serif truncate mt-1 group-hover:text-amber-700 transition-colors">
-                        {node.person.fullName}
-                      </h4>
-
-                      {node.person.courtesyName && (
-                        <p className="text-[11px] text-amber-800/80 italic truncate">
-                          Tự: {node.person.courtesyName}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Vợ / Chồng & Năm sinh-mất */}
-                    <div className="text-[10px] text-stone-500 flex items-center justify-between border-t border-[#ead8c0]/60 pt-1">
-                      <span>
-                        {node.person.dobLunarYear ? node.person.dobLunarYear.split(' ')[0] : (node.person.dobSolar ? node.person.dobSolar.slice(0, 4) : '—')}
-                        {' - '}
-                        {node.person.isAlive ? 'Nay' : (node.person.dodLunarYear ? node.person.dodLunarYear.split(' ')[0] : 'Mất')}
+                {/* Header của Card Lớn: Đời & Chi & Tiêu đề Gia đình */}
+                <div className="flex items-center justify-between px-1 pb-2 border-b border-[#ead8c0]/70 text-[11px]">
+                  <div className="flex items-center gap-1.5 font-bold text-amber-950 font-serif">
+                    <span className="px-2 py-0.5 rounded-full bg-amber-200/70 text-amber-900 text-[10px]">
+                      Đời {famNode.generation}
+                    </span>
+                    {famNode.branchName && (
+                      <span className="text-stone-500 font-sans font-medium text-[10px] truncate max-w-[130px]">
+                        {famNode.branchName.split('(')[0]}
                       </span>
-
-                      {node.spouses.length > 0 && (
-                        <span className="text-amber-700 font-medium truncate max-w-[90px]">
-                          ♥ {node.spouses[0].fullName.split(' ').slice(-1)[0]}
-                        </span>
-                      )}
-                    </div>
+                    )}
                   </div>
+                  {hasMultipleMembers && (
+                    <span className="text-[10px] text-rose-700 font-semibold flex items-center gap-1 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">
+                      <Heart className="w-3 h-3 fill-rose-500 text-rose-500" />
+                      Gia đình ({famNode.members.length} người)
+                    </span>
+                  )}
+                </div>
+
+                {/* Khối chứa các CARD NHỎ bên trong */}
+                <div className="flex items-center gap-3 pt-2 justify-center">
+                  {famNode.members.map((item, mIdx) => {
+                    const person = item.person;
+                    const isMale = person.gender === 'MALE';
+                    const isSpouse = item.role === 'SPOUSE';
+
+                    return (
+                      <React.Fragment key={person.id}>
+                        {/* Biểu tượng nối Hôn Nhân ở giữa nếu có nhiều vợ/chồng */}
+                        {mIdx > 0 && (
+                          <div className="flex flex-col items-center justify-center text-rose-600 px-0.5 flex-shrink-0">
+                            <div className="w-6 h-6 rounded-full bg-rose-100 border border-rose-300 flex items-center justify-center text-[10px] font-bold shadow-xs">
+                              ♥
+                            </div>
+                            {item.marriageNotes && (
+                              <span className="text-[9px] text-rose-800 font-medium whitespace-nowrap mt-0.5">
+                                {item.marriageNotes}
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        {/* CARD NHỎ THÀNH VIÊN */}
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedPerson(person);
+                          }}
+                          className={`w-[200px] h-[105px] rounded-2xl p-2.5 cursor-pointer shadow-sm border transition-all duration-150 hover:scale-105 hover:shadow-md flex items-center gap-2.5 ${
+                            isMale
+                              ? 'bg-gradient-to-br from-white to-amber-50/70 border-[#ddbd9b] hover:border-amber-600'
+                              : 'bg-gradient-to-br from-white to-rose-50/70 border-rose-200 hover:border-rose-400'
+                          }`}
+                        >
+                          {/* Avatar */}
+                          <div className="relative flex-shrink-0">
+                            <img
+                              src={
+                                person.avatarUrl ||
+                                (isMale
+                                  ? 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'
+                                  : 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150')
+                              }
+                              alt={person.fullName}
+                              className="w-12 h-12 rounded-full object-cover border-2 border-amber-500/40 shadow-xs"
+                            />
+                            <span
+                              className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white ${
+                                person.isAlive ? 'bg-emerald-500' : 'bg-stone-500'
+                              }`}
+                              title={person.isAlive ? 'Còn sống' : 'Đã mất'}
+                            />
+                          </div>
+
+                          {/* Thông tin cá nhân */}
+                          <div className="flex-1 min-w-0 flex flex-col justify-between h-full py-0.5">
+                            <div>
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="text-[9px] font-bold uppercase px-1 rounded bg-stone-100 text-stone-700">
+                                  {isMale ? 'Nam' : 'Nữ'}
+                                </span>
+                                {isSpouse && (
+                                  <span className="text-[9px] text-rose-700 font-bold truncate max-w-[65px]">
+                                    {item.marriageNotes || 'Hôn phối'}
+                                  </span>
+                                )}
+                              </div>
+
+                              <h4 className="font-bold text-xs sm:text-sm text-[#341d13] font-serif truncate mt-0.5 hover:text-amber-700 transition-colors">
+                                {person.fullName}
+                              </h4>
+
+                              {person.courtesyName && (
+                                <p className="text-[10px] text-amber-800/80 italic truncate">
+                                  Tự: {person.courtesyName}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Năm sinh / Năm mất */}
+                            <div className="text-[9px] text-stone-500 border-t border-[#ead8c0]/60 pt-0.5 flex items-center justify-between">
+                              <span>
+                                {person.dobLunarYear
+                                  ? person.dobLunarYear.split(' ')[0]
+                                  : person.dobSolar
+                                  ? person.dobSolar.slice(0, 4)
+                                  : '—'}
+                                {' - '}
+                                {person.isAlive
+                                  ? 'Nay'
+                                  : person.dodLunarYear
+                                  ? person.dodLunarYear.split(' ')[0]
+                                  : 'Mất'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </React.Fragment>
+                    );
+                  })}
                 </div>
               </div>
             );
@@ -431,21 +451,23 @@ export default function TreePage() {
         </div>
 
         {/* Floating Legend Chú Thích Đường Dẫn */}
-        <div className="absolute bottom-4 left-4 z-20 bg-white/95 backdrop-blur-md rounded-2xl p-3 shadow-lg border border-[#ead8c0] text-xs space-y-2 pointer-events-auto">
+        <div className="absolute bottom-4 left-4 z-20 bg-white/95 backdrop-blur-md rounded-2xl p-3.5 shadow-lg border border-[#ead8c0] text-xs space-y-2 pointer-events-auto">
           <div className="font-bold text-[#341d13] text-[11px] uppercase tracking-wider">
-            Quy Ước Đường Dẫn Phả Đồ:
+            Quy Ước Phả Đồ:
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-5 h-1 bg-red-600 rounded-full inline-block shadow-sm" />
-            <span className="font-semibold text-red-900">Nhánh Nam (Nhánh Đinh / Chính)</span>
+            <span className="w-5 h-1.5 bg-red-600 rounded-full inline-block shadow-sm" />
+            <span className="font-semibold text-red-900">Nhánh Nam (Đinh / Chính - Đường Đỏ)</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-5 h-1 border-t-2 border-dashed border-sky-500 inline-block" />
-            <span className="font-semibold text-sky-800">Nhánh Nữ (Nhánh Ngoại)</span>
+            <span className="w-5 h-1.5 border-t-2 border-dashed border-sky-500 inline-block" />
+            <span className="font-semibold text-sky-800">Nhánh Nữ (Ngoại - Đường Xanh)</span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="w-5 h-1 border-t-2 border-dashed border-rose-500 inline-block" />
-            <span className="font-semibold text-rose-700">♥ Liên Kết Hôn Nhân (Vợ - Chồng)</span>
+          <div className="flex items-center gap-2 pt-0.5 border-t border-[#ead8c0]/80">
+            <span className="w-5 h-4 bg-amber-50 border border-amber-400 rounded-md inline-flex items-center justify-center text-[10px] text-rose-600 font-bold shadow-xs">
+              ♥
+            </span>
+            <span className="font-medium text-stone-700">Card Lớn gộp Vợ Chồng (Hỗ trợ Đa Thê / Đa Phu)</span>
           </div>
         </div>
       </div>
