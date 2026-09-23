@@ -264,9 +264,16 @@ export default function TreePage() {
             style={{ width: '4000px', height: '3000px' }}
           >
             <defs>
-              <linearGradient id="linkGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="#bf8453" stopOpacity="0.8" />
-                <stop offset="100%" stopColor="#8c5436" stopOpacity="0.8" />
+              {/* Gradient Nhánh Nam (Nhánh Đinh / Chính - Màu Đỏ) */}
+              <linearGradient id="maleLinkGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="#ef4444" stopOpacity="0.9" />
+                <stop offset="100%" stopColor="#b91c1c" stopOpacity="0.95" />
+              </linearGradient>
+
+              {/* Gradient Nhánh Nữ (Nhánh Ngoại - Màu Xanh) */}
+              <linearGradient id="femaleLinkGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.9" />
+                <stop offset="100%" stopColor="#0284c7" stopOpacity="0.95" />
               </linearGradient>
             </defs>
             {links.map((link) => {
@@ -275,13 +282,16 @@ export default function TreePage() {
               const midY = link.sourceY + deltaY / 2;
               const pathD = `M ${link.sourceX} ${link.sourceY} C ${link.sourceX} ${midY}, ${link.targetX} ${midY}, ${link.targetX} ${link.targetY}`;
               
+              const isFemaleBranch = link.childGender === 'FEMALE';
+
               return (
                 <path
                   key={link.id}
                   d={pathD}
                   fill="none"
-                  stroke="url(#linkGradient)"
-                  strokeWidth="2.5"
+                  stroke={isFemaleBranch ? 'url(#femaleLinkGradient)' : 'url(#maleLinkGradient)'}
+                  strokeWidth={isFemaleBranch ? '2.5' : '3'}
+                  strokeDasharray={isFemaleBranch ? '4 2' : undefined}
                   strokeLinecap="round"
                 />
               );
@@ -372,9 +382,21 @@ export default function TreePage() {
                     </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
+        </div>
+
+        {/* Floating Legend Chú Thích Đường Dẫn */}
+        <div className="absolute bottom-4 left-4 z-20 bg-white/95 backdrop-blur-md rounded-2xl p-3 shadow-lg border border-[#ead8c0] text-xs space-y-2 pointer-events-auto">
+          <div className="font-bold text-[#341d13] text-[11px] uppercase tracking-wider">
+            Quy Ước Đường Dẫn Phả Đồ:
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-5 h-1 bg-red-600 rounded-full inline-block shadow-sm" />
+            <span className="font-semibold text-red-900">Nhánh Nam (Nhánh Đinh / Chính)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-5 h-1 border-t-2 border-dashed border-sky-500 inline-block" />
+            <span className="font-semibold text-sky-800">Nhánh Nữ (Nhánh Ngoại)</span>
+          </div>
         </div>
       </div>
 

@@ -21,6 +21,7 @@ export interface TreeLink {
   sourceY: number;
   targetX: number;
   targetY: number;
+  childGender: 'MALE' | 'FEMALE' | 'OTHER';
 }
 
 export interface TreeLayoutResult {
@@ -142,6 +143,7 @@ export function buildFamilyTreeLayout(
         sourceY,
         targetX,
         targetY,
+        childGender: childNode.person.gender || 'MALE',
       });
     }
   });
