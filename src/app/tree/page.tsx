@@ -34,12 +34,34 @@ export default function TreePage() {
 
   // Zoom & Pan state
   const [scale, setScale] = useState(0.85);
-  const [position, setPosition] = useState({ x: 400, y: 80 });
+  const [position, setPosition] = useState({ x: 700, y: 60 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
+  const viewportRef = useRef<HTMLDivElement>(null);
   const treeContainerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
+
+  const centerTree = (targetScale?: number) => {
+    if (viewportRef.current) {
+      const rect = viewportRef.current.getBoundingClientRect();
+      setPosition({
+        x: rect.width / 2,
+        y: 60,
+      });
+      if (targetScale !== undefined) {
+        setScale(targetScale);
+      }
+    } else if (typeof window !== 'undefined') {
+      setPosition({
+        x: window.innerWidth / 2,
+        y: 60,
+      });
+      if (targetScale !== undefined) {
+        setScale(targetScale);
+      }
+    }
+  };
 
   // Fetch Tree Data
   const loadTree = async () => {
@@ -54,6 +76,9 @@ export default function TreePage() {
       setNodes(data.layout.nodes);
       setLinks(data.layout.links);
       setBranches(data.branches);
+      setTimeout(() => {
+        centerTree(0.85);
+      }, 50);
     } catch (err) {
       console.error('Failed to load tree layout', err);
     } finally {
@@ -63,6 +88,12 @@ export default function TreePage() {
 
   useEffect(() => {
     loadTree();
+
+    const handleResize = () => {
+      centerTree();
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, [selectedBranch, selectedGeneration]);
 
   // Handle Drag / Pan
@@ -94,8 +125,7 @@ export default function TreePage() {
   const zoomIn = () => setScale((s) => Math.min(s + 0.15, 2.5));
   const zoomOut = () => setScale((s) => Math.max(s - 0.15, 0.3));
   const resetView = () => {
-    setScale(0.85);
-    setPosition({ x: 400, y: 80 });
+    centerTree(0.85);
   };
 
   // Xuất file ảnh PNG
@@ -211,6 +241,7 @@ export default function TreePage() {
 
       {/* 2. TREE CANVAS CONTAINER */}
       <div
+        ref={viewportRef}
         className="flex-1 relative cursor-grab active:cursor-grabbing overflow-hidden pattern-bg"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
