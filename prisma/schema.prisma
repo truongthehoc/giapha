@@ -1,0 +1,265 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Clan {
+  id           BigInt    @id @default(autoincrement())
+  name         String    @db.VarChar(255)
+  ancestorName String?   @map("ancestor_name") @db.VarChar(255)
+  originPlace  String?   @map("origin_place") @db.VarChar(255)
+  hallAddress  String?   @map("hall_address") @db.VarChar(255)
+  description  String?   @db.Text
+  avatarUrl    String?   @map("avatar_url") @db.VarChar(500)
+  coverUrl     String?   @map("cover_url") @db.VarChar(500)
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  branches     Branch[]
+  persons      Person[]
+  events       Event[]
+  funds        Fund[]
+  articles     Article[]
+  users        User[]
+
+  @@map("clans")
+}
+
+model Branch {
+  id             BigInt    @id @default(autoincrement())
+  clanId         BigInt    @map("clan_id")
+  parentBranchId BigInt?   @map("parent_branch_id")
+  name           String    @db.VarChar(150)
+  description    String?   @db.Text
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  clan           Clan      @relation(fields: [clanId], references: [id], onDelete: Cascade)
+  parentBranch   Branch?   @relation("BranchSubBranches", fields: [parentBranchId], references: [id], onDelete: SetNull)
+  subBranches    Branch[]  @relation("BranchSubBranches")
+  persons        Person[]
+
+  @@map("branches")
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+model Person {
+  id               BigInt    @id @default(autoincrement())
+  clanId           BigInt    @map("clan_id")
+  branchId         BigInt?   @map("branch_id")
+  
+  fullName         String    @map("full_name") @db.VarChar(150)
+  courtesyName     String?   @map("courtesy_name") @db.VarChar(100)
+  posthumousName   String?   @map("posthumous_name") @db.VarChar(100)
+  gender           Gender    @default(MALE)
+  avatarUrl        String?   @map("avatar_url") @db.VarChar(500)
+
+  generationLevel  Int       @default(1) @map("generation_level")
+  birthOrder       Int       @default(1) @map("birth_order")
+  
+  isAlive          Boolean   @default(true) @map("is_alive")
+  
+  dobSolar         DateTime? @map("dob_solar") @db.Date
+  dobLunarDay      Int?      @map("dob_lunar_day")
+  dobLunarMonth    Int?      @map("dob_lunar_month")
+  dobLunarYear     String?   @map("dob_lunar_year") @db.VarChar(50)
+  dobIsLeapMonth   Boolean   @default(false) @map("dob_is_leap_month")
+
+  dodSolar         DateTime? @map("dod_solar") @db.Date
+  dodLunarDay      Int?      @map("dod_lunar_day")
+  dodLunarMonth    Int?      @map("dod_lunar_month")
+  dodLunarYear     String?   @map("dod_lunar_year") @db.VarChar(50)
+  dodIsLeapMonth   Boolean   @default(false) @map("dod_is_leap_month")
+  dodHour          String?   @map("dod_hour") @db.VarChar(50)
+
+  burialPlace      String?   @map("burial_place") @db.VarChar(255)
+  burialGps        Json?     @map("burial_gps")
+  burialImages     Json?     @map("burial_images")
+
+  biography        String?   @db.LongText
+  phone            String?   @db.VarChar(20)
+  email            String?   @db.VarChar(100)
+  currentResidence String?   @map("current_residence") @db.VarChar(255)
+
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  clan             Clan      @relation(fields: [clanId], references: [id], onDelete: Cascade)
+  branch           Branch?   @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  
+  parentRelations  ParentChild[] @relation("ChildRelations")
+  childRelations   ParentChild[] @relation("ParentRelations")
+
+  marriagesAsHusband Marriage[]  @relation("HusbandMarriages")
+  marriagesAsWife    Marriage[]  @relation("WifeMarriages")
+
+  events           Event[]
+  user             User?
+
+  @@index([fullName])
+  @@index([clanId, generationLevel])
+  @@index([dodLunarMonth, dodLunarDay])
+  @@map("persons")
+}
+
+enum MarriageStatus {
+  MARRIED
+  DIVORCED
+  WIDOWED
+}
+
+model Marriage {
+  id            BigInt         @id @default(autoincrement())
+  husbandId     BigInt         @map("husband_id")
+  wifeId        BigInt         @map("wife_id")
+  marriageOrder Int            @default(1) @map("marriage_order")
+  status        MarriageStatus @default(MARRIED)
+  marriageDate  DateTime?      @map("marriage_date") @db.Date
+  notes         String?        @db.VarChar(255)
+  createdAt     DateTime       @default(now()) @map("created_at")
+
+  husband       Person         @relation("HusbandMarriages", fields: [husbandId], references: [id], onDelete: Cascade)
+  wife          Person         @relation("WifeMarriages", fields: [wifeId], references: [id], onDelete: Cascade)
+
+  @@map("marriages")
+}
+
+enum RelationType {
+  BIOLOGICAL
+  ADOPTED
+  STEP
+}
+
+model ParentChild {
+  id           BigInt       @id @default(autoincrement())
+  parentId     BigInt       @map("parent_id")
+  childId      BigInt       @map("child_id")
+  relationType RelationType @default(BIOLOGICAL) @map("relation_type")
+  createdAt    DateTime     @default(now()) @map("created_at")
+
+  parent       Person       @relation("ParentRelations", fields: [parentId], references: [id], onDelete: Cascade)
+  child        Person       @relation("ChildRelations", fields: [childId], references: [id], onDelete: Cascade)
+
+  @@unique([parentId, childId])
+  @@map("parent_child")
+}
+
+enum EventType {
+  DEATH_ANNIVERSARY
+  CLAN_GATHERING
+  TOMB_SWEEPING
+  CUSTOM
+}
+
+model Event {
+  id                BigInt    @id @default(autoincrement())
+  clanId            BigInt    @map("clan_id")
+  personId          BigInt?   @map("person_id")
+  title             String    @db.VarChar(255)
+  eventType         EventType @default(DEATH_ANNIVERSARY) @map("event_type")
+  lunarDay          Int?      @map("lunar_day")
+  lunarMonth        Int?      @map("lunar_month")
+  isRecurringYearly Boolean   @default(true) @map("is_recurring_yearly")
+  startDatetime     DateTime? @map("start_datetime")
+  location          String?   @db.VarChar(255)
+  description       String?   @db.Text
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  clan              Clan      @relation(fields: [clanId], references: [id], onDelete: Cascade)
+  person            Person?   @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([lunarMonth, lunarDay])
+  @@map("events")
+}
+
+model Fund {
+  id             BigInt            @id @default(autoincrement())
+  clanId         BigInt            @map("clan_id")
+  name           String            @db.VarChar(150)
+  currentBalance Decimal           @default(0.00) @map("current_balance") @db.Decimal(15, 2)
+  description    String?           @db.Text
+
+  clan           Clan              @relation(fields: [clanId], references: [id], onDelete: Cascade)
+  transactions   FundTransaction[]
+
+  @@map("funds")
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+model FundTransaction {
+  id              BigInt          @id @default(autoincrement())
+  fundId          BigInt          @map("fund_id")
+  personId        BigInt?         @map("person_id")
+  contributorName String?         @map("contributor_name") @db.VarChar(150)
+  type            TransactionType
+  amount          Decimal         @db.Decimal(15, 2)
+  transactionDate DateTime        @map("transaction_date") @db.Date
+  purpose         String          @db.VarChar(255)
+  receiptImageUrl String?         @map("receipt_image_url") @db.VarChar(500)
+  createdAt       DateTime        @default(now()) @map("created_at")
+
+  fund            Fund            @relation(fields: [fundId], references: [id], onDelete: Cascade)
+
+  @@map("fund_transactions")
+}
+
+enum ArticleCategory {
+  TOC_UOC
+  HISTORY
+  NEWS
+  ORATION
+  OTHER
+}
+
+model Article {
+  id          BigInt          @id @default(autoincrement())
+  clanId      BigInt          @map("clan_id")
+  category    ArticleCategory
+  title       String          @db.VarChar(255)
+  slug        String          @db.VarChar(255)
+  content     String          @db.LongText
+  isPublished Boolean         @default(true) @map("is_published")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  clan        Clan            @relation(fields: [clanId], references: [id], onDelete: Cascade)
+
+  @@map("articles")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  CLAN_ADMIN
+  BRANCH_ADMIN
+  MEMBER
+}
+
+model User {
+  id           BigInt   @id @default(autoincrement())
+  clanId       BigInt   @map("clan_id")
+  personId     BigInt?  @unique @map("person_id")
+  email        String   @unique @db.VarChar(150)
+  phone        String?  @unique @db.VarChar(20)
+  passwordHash String   @map("password_hash") @db.VarChar(255)
+  role         UserRole @default(MEMBER)
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  clan         Clan     @relation(fields: [clanId], references: [id], onDelete: Cascade)
+  person       Person?  @relation(fields: [personId], references: [id], onDelete: SetNull)
+
+  @@map("users")
+}

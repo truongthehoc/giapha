@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 45 40% 98%;
+    --foreground: 20 40% 15%;
+  }
+
+  body {
+    background-color: #fbf7f0;
+    color: #341d13;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #f4ede0;
+}
+::-webkit-scrollbar-thumb {
+  background: #cfa074;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #aa6d42;
+}
+
+/* Traditional Oriental Pattern / Ornament Classes */
+.pattern-bg {
+  background-color: #fbf7f0;
+  background-image: radial-gradient(#e5d5be 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.heritage-border {
+  border-color: #ddbd9b;
+}
+
+.heritage-gradient {
+  background: linear-gradient(135deg, #6f432d 0%, #341d13 100%);
+}
+
+.gold-gradient {
+  background: linear-gradient(135deg, #f5b977 0%, #b74410 100%);
+}
